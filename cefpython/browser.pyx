@@ -221,6 +221,8 @@ cdef class PyBrowser:
                     "GetViewRect", "GetScreenPoint", "GetScreenInfo",
                     "OnPopupShow", "OnPopupSize", "OnPaint", "OnCursorChange",
                     "OnScrollOffsetChanged"]
+            # JSDialogHandler
+            self.allowedClientCallbacks += ["OnJSDialog"]
         if name not in self.allowedClientCallbacks:
             raise Exception("Browser.SetClientCallback() failed: unknown "
                             "callback: %s" % name)

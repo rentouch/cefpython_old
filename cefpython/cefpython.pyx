@@ -174,6 +174,7 @@ IF CEF_VERSION == 3:
     include "web_request_cef3.pyx"
     include "command_line.pyx"
     include "app.pyx"
+    include "jsdialog_handler_cef3.pyx"
 
 cdef public void cefpython_GetDebugOptions(
         cpp_bool* debug,

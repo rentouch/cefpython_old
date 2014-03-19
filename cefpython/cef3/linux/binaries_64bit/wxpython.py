@@ -481,6 +481,18 @@ class ClientHandler:
         allowPopups = True
         return not allowPopups
 
+    # -------------------------------------------------------------------------
+    # JSDialog
+    # -------------------------------------------------------------------------
+
+    # Empty placeholder: callback
+    def OnJSDialog(self, browser, origin_url, accept_lang, dialog_type,
+                   message_text, default_prompt_text, callback,
+                   suppress_message):
+        # If you want to suppress the JSDialog:
+        # suppress_message[0] = True
+        return False
+
 
 class MyApp(wx.App):
     timer = None

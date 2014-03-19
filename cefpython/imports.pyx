@@ -105,6 +105,7 @@ from cef_frame cimport *
 
 # cannot cimport *, that would cause name conflicts with constants.
 cimport cef_types
+ctypedef cef_types.cef_jsdialog_type_t JSDialogType
 ctypedef cef_types.cef_paint_element_type_t PaintElementType
 IF CEF_VERSION == 3:
     from cef_types cimport CefKeyEvent
@@ -168,3 +169,4 @@ IF CEF_VERSION == 3:
     from cef_urlrequest_cef3 cimport *
     from web_request_client_cef3 cimport *
     from cef_command_line cimport *
+    from cef_jsdialog_handler_cef3 cimport *
