@@ -768,7 +768,8 @@ bool ClientHandler::OnBeforeUnloadDialog(CefRefPtr<CefBrowser> browser,
                             bool is_reload,
                             CefRefPtr<CefJSDialogCallback> callback) {
     REQUIRE_UI_THREAD();
-    return false;
+    return CefJSDialogHandler_OnBeforeUnloadDialog(browser, message_text, 
+                                                   is_reload, callback);
 }
 
 ///

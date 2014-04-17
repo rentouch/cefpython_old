@@ -23,6 +23,7 @@ cdef class PyJSDialogCallback:
 # -----------------------------------------------------------------------------
 # JSDialogHandler
 # -----------------------------------------------------------------------------
+# -- OnJSDialog --
 cdef public cpp_bool CefJSDialogHandler_OnJSDialog(
         CefRefPtr[CefBrowser] cefBrowser,
         const CefString& origin_url,
@@ -57,6 +58,36 @@ cdef public cpp_bool CefJSDialogHandler_OnJSDialog(
             returnValue = clientCallback(pyBrowser, pyOriginUrl, pyAcceptLang,
                     dialog_type, pyMessageText, pyDefaultPromptText, pyCallback, pySuppressMessage)
             (&suppress_message)[0] = <cpp_bool>bool(pySuppressMessage[0])
+            return returnValue
+        return False
+    except:
+        (exc_type, exc_value, exc_trace) = sys.exc_info()
+        sys.excepthook(exc_type, exc_value, exc_trace)
+
+# -- OnBeforeUnloadDialog --
+cdef public cpp_bool CefJSDialogHandler_OnBeforeUnloadDialog(
+        CefRefPtr[CefBrowser] cefBrowser,
+        const CefString& message_text,
+        cpp_bool& is_reload,
+        CefRefPtr[CefJSDialogCallback] callback
+        ) except * with gil:
+    cdef PyBrowser pyBrowser
+    cdef py_string pyMessage_text
+    cdef list pyIs_reload = []
+    cdef PyJSDialogCallback pyCallback
+
+    cdef object clientCallback
+    cdef py_bool returnValue
+    try:
+        pyBrowser = GetPyBrowser(cefBrowser)
+        pyMessage_text = CefToPyString(message_text)
+        pyIs_reload = [bool(is_reload)]
+        pyCallback = CreatePyJSDialogCallback(callback)
+
+        clientCallback = pyBrowser.GetClientCallback("OnBeforeUnloadDialog")
+        if clientCallback:
+            returnValue = clientCallback(pyBrowser, pyMessage_text, pyIs_reload, pyCallback)
+            (&is_reload)[0] = <cpp_bool>bool(pyIs_reload[0])
             return returnValue
         return False
     except:

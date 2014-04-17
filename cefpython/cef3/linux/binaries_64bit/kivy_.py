@@ -659,6 +659,10 @@ class ClientHandler:
         suppress_message[0] = True
         return False
 
+    def OnBeforeUnloadDialog(self, browser, message_text, is_reload, callback):
+        callback.Continue(allow=True, user_input="")
+        return True
+
 
 if __name__ == '__main__':
     class CefBrowserApp(App):
