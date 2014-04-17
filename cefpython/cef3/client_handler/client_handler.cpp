@@ -749,11 +749,9 @@ bool ClientHandler::OnJSDialog(CefRefPtr<CefBrowser> browser,
                   CefRefPtr<CefJSDialogCallback> callback,
                   bool& suppress_message) {
     REQUIRE_UI_THREAD();
-    //suppress_message=true;
     return CefJSDialogHandler_OnJSDialog(browser, origin_url, accept_lang, dialog_type,
                                   message_text, default_prompt_text, callback,
                                   suppress_message);
-    //return false;
 }
 
 ///

@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------
 cdef PyJSDialogCallback CreatePyJSDialogCallback(
         CefRefPtr[CefJSDialogCallback] cefCallback):
-    cdef PyJSDialogCallback pyCallback = PyAuthCallback()
+    cdef PyJSDialogCallback pyCallback = PyJSDialogCallback()
     pyCallback.cefCallback = cefCallback
     return pyCallback
 
@@ -38,7 +38,6 @@ cdef public cpp_bool CefJSDialogHandler_OnJSDialog(
     cdef py_string pyAcceptLang
     cdef py_string pyMessageText
     cdef py_string pyDefaultPromptText
-    ## XXX pyCallback
     cdef PyJSDialogCallback pyCallback
     cdef list pySuppressMessage = []
     
@@ -50,13 +49,13 @@ cdef public cpp_bool CefJSDialogHandler_OnJSDialog(
         pyAcceptLang = CefToPyString(accept_lang)
         pyMessageText = CefToPyString(message_text)
         pyDefaultPromptText = CefToPyString(default_prompt_text)
-        ## pyCallback = XXX(callback)
+        pyCallback = CreatePyJSDialogCallback(callback)
         pySuppressMessage = [bool(suppress_message)]
         
         clientCallback = pyBrowser.GetClientCallback("OnJSDialog")
         if clientCallback:
             returnValue = clientCallback(pyBrowser, pyOriginUrl, pyAcceptLang,
-                    dialog_type, pyMessageText, pyDefaultPromptText, None, pySuppressMessage)
+                    dialog_type, pyMessageText, pyDefaultPromptText, pyCallback, pySuppressMessage)
             (&suppress_message)[0] = <cpp_bool>bool(pySuppressMessage[0])
             return returnValue
         return False
