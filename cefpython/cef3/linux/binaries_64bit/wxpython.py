@@ -493,6 +493,18 @@ class ClientHandler:
         # suppress_message[0] = True
         return False
 
+    def OnBeforeUnloadDialog(self, browser, message_text, is_reload, callback):
+        print("OnBeforeUnloadDialog()")
+        # callback.Continue(allow=True, user_input="")
+        # return True
+        return False
+
+    def OnResetDialogState(self, browser):
+        print("OnResetDialogState()")
+
+    def OnDialogClosed(self, browser):
+        print("OnDialogClosed()")
+
 
 class MyApp(wx.App):
     timer = None

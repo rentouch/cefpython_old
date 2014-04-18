@@ -93,3 +93,32 @@ cdef public cpp_bool CefJSDialogHandler_OnBeforeUnloadDialog(
     except:
         (exc_type, exc_value, exc_trace) = sys.exc_info()
         sys.excepthook(exc_type, exc_value, exc_trace)
+
+# -- OnResetDialogState --
+cdef public void CefJSDialogHandler_OnResetDialogState(
+        CefRefPtr[CefBrowser] cefBrowser
+        ) except * with gil:
+        cdef PyBrowser pyBrowser
+        try:
+            pyBrowser = GetPyBrowser(cefBrowser)
+            callback = pyBrowser.GetClientCallback("OnResetDialogState")
+            if callback:
+                callback(pyBrowser)
+        except:
+            (exc_type, exc_value, exc_trace) = sys.exc_info()
+            sys.excepthook(exc_type, exc_value, exc_trace)
+
+# -- OnDialogClosed --
+cdef public void CefJSDialogHandler_OnDialogClosed(
+        CefRefPtr[CefBrowser] cefBrowser,
+        ) except * with gil:
+        cdef PyBrowser pyBrowser
+        try:
+            pyBrowser = GetPyBrowser(cefBrowser)
+            callback = pyBrowser.GetClientCallback("OnDialogClosed")
+            if callback:
+                callback(pyBrowser)
+        except:
+            (exc_type, exc_value, exc_trace) = sys.exc_info()
+            sys.excepthook(exc_type, exc_value, exc_trace)
+

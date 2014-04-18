@@ -780,6 +780,7 @@ bool ClientHandler::OnBeforeUnloadDialog(CefRefPtr<CefBrowser> browser,
 /*--cef()--*/
 void ClientHandler::OnResetDialogState(CefRefPtr<CefBrowser> browser) {
     REQUIRE_UI_THREAD();
+    return CefJSDialogHandler_OnResetDialogState(browser);
 }
 
 ///
@@ -788,4 +789,5 @@ void ClientHandler::OnResetDialogState(CefRefPtr<CefBrowser> browser) {
 /*--cef()--*/
 void ClientHandler::OnDialogClosed(CefRefPtr<CefBrowser> browser) {
     REQUIRE_UI_THREAD();
+    return CefJSDialogHandler_OnDialogClosed(browser);
 }
