@@ -217,3 +217,9 @@ cdef extern from "include/internal/cef_types.h":
         UR_IO_PENDING
         UR_CANCELED
         UR_FAILED
+    
+    # CefJSDialogHandler.OnJSDialog()
+    enum cef_jsdialog_type_t:
+        JSDIALOGTYPE_ALERT = 0,
+        JSDIALOGTYPE_CONFIRM,
+        JSDIALOGTYPE_PROMPT,

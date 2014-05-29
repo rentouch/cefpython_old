@@ -661,6 +661,16 @@ class ClientHandler:
         rect.append(height)
         # print("GetViewRect(): %s x %s" % (width, height))
         return True
+       
+    def OnJSDialog(self, browser, origin_url, accept_lang, dialog_type,
+                   message_text, default_prompt_text, callback,
+                   suppress_message):
+        suppress_message[0] = True
+        return False
+
+    def OnBeforeUnloadDialog(self, browser, message_text, is_reload, callback):
+        callback.Continue(allow=True, user_input="")
+        return True
 
 
 if __name__ == '__main__':
