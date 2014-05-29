@@ -113,7 +113,7 @@ class MainFrame(wx.Frame):
             # If there are problems with Flash you can disable it here,
             # by disabling all plugins.
             browserSettings={"plugins_disabled": False},
-            navigateUrl="file://"+GetApplicationPath("wxpython.html"))
+            navigateUrl="https://mindmeister.com")
 
         clientHandler = ClientHandler()
         self.browser.SetClientHandler(clientHandler)
@@ -450,8 +450,8 @@ class ClientHandler:
         print("error code = %s" % errorCode)
         print("error text = %s" % errorTextList[0])
         print("failed url = %s" % failedUrl)
-        customErrorMessage = "My custom error message!"
-        frame.LoadUrl("data:text/html,%s" % customErrorMessage)
+        #customErrorMessage = "My custom error message!"
+        #frame.LoadUrl("data:text/html,%s" % customErrorMessage)
 
     def OnRendererProcessTerminated(self, browser, status):
         print("LoadHandler::OnRendererProcessTerminated()")
@@ -536,7 +536,7 @@ if __name__ == '__main__':
     # https://code.google.com/p/chromiumembedded/source/browse/trunk/cef3/libcef/common/cef_switches.cc
     switches = {
         # "proxy-server": "socks5://127.0.0.1:8888",
-        # "enable-media-stream": "",
+        "enable-media-stream": "",
         # "--invalid-switch": "" -> Invalid switch name
     }
     cefpython.Initialize(settings, switches)

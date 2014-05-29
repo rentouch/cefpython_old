@@ -130,6 +130,7 @@ bool ClientHandler::OnBeforePopup(CefRefPtr<CefBrowser> browser,
 ///
 /*--cef()--*/
 void ClientHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
+    LifespanHandler_OnAfterCreated(browser);
 }
 
 ///

@@ -73,7 +73,7 @@ class CefBrowser(Widget):
 
     '''Represent a browser widget for kivy, which can be used like a normal widget.
     '''
-    def __init__(self, start_url='https://mindmeister.com', **kwargs):
+    def __init__(self, start_url='http://jegger.ch/datapool/app/test.html', **kwargs):
         super(CefBrowser, self).__init__(**kwargs)
 
         self.start_url = start_url
@@ -327,10 +327,6 @@ class CefBrowser(Widget):
             cefModifiers |= cefpython.EVENTFLAG_ALT_DOWN
         # Capslock todo.
         cef_keycode = self.translate_to_cef_keycode(keycode[0])
-        print "keycode", keycode[0]
-        if keycode[0] == 313:
-            cef_keycode = 64
-        print cef_keycode
         keyEvent = {
                 "type": cefpython.KEYEVENT_KEYUP,
                 "native_key_code": cef_keycode,
@@ -575,7 +571,29 @@ class ClientHandler:
                 "kivy_.py > ClientHandler > OnLoadStart > _fix_select_boxes()")
 
 
+    # LifeSpanHandler
+    def OnBeforePopup(self, browser, frame, targetUrl, targetFrameName, popupFeatures, windowInfo, client, browserSettings, *largs):
+        wi = cefpython.WindowInfo()
+        wi.SetAsChild(0)
+        wi.SetAsOffscreen(0)
+        print wi.windowType
+        # This does not work, because we're not in UI thread: 
+        #self.browser = cefpython.CreateBrowserSync(wi, {}, navigateUrl=targetUrl)
+        windowInfo.append(wi)
+        browserSettings.append({})
+        print("OnBeforePopup()", browser)
+        return False
+
+    def OnAfterCreated(self, browser):
+        print("OnAfterCreated()", browser)
+        ch = ClientHandler(None)
+        print(browser.GetClientCallbacksDict())
+        browser.SetClientHandler(ch)
+        print(browser.GetClientCallbacksDict())
+
+
     def OnLoadStart(self, browser, frame):
+        print("OnLoadStart()", browser)
         self._fix_select_boxes(frame);
         browserWidget = browser.GetUserData("browserWidget")
         if browserWidget and browserWidget.keyboard_mode == "local":
@@ -637,7 +655,7 @@ class ClientHandler:
 
     def OnPaint(self, browser, paintElementType, dirtyRects, buffer, width,
             height):
-        # print "OnPaint()"
+        print("OnPaint()", browser)
         if paintElementType != cefpython.PET_VIEW:
             print "Popups aren't implemented yet"
             return
