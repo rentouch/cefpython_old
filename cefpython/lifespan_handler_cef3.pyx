@@ -36,6 +36,8 @@ cdef public cpp_bool LifespanHandler_OnBeforePopup(
     cdef py_string pyTargetUrl
     cdef py_string pyTargetFrameName
     cdef list pyNoJavascriptAccess # out bool pyNoJavascriptAccess[0]
+    cdef list pyWindowInfo
+    cdef list pyBrowserSettings
     cdef object callback
     cdef py_bool returnValue
     try:
@@ -44,14 +46,32 @@ cdef public cpp_bool LifespanHandler_OnBeforePopup(
         pyTargetUrl = CefToPyString(targetUrl)
         pyTargetFrameName = CefToPyString(targetFrameName)
         pyNoJavascriptAccess = [noJavascriptAccess[0]]
+        pyWindowInfo = []
+        pyBrowserSettings = []
         callback = pyBrowser.GetClientCallback("OnBeforePopup")
         if callback:
             returnValue = bool(callback(pyBrowser, pyFrame, pyTargetUrl,
-                    pyTargetFrameName, None, None, None, None, 
+                    pyTargetFrameName, None, pyWindowInfo, None, pyBrowserSettings, 
                     pyNoJavascriptAccess))
             noJavascriptAccess[0] = <cpp_bool>bool(pyNoJavascriptAccess[0])
+            SetBrowserSettings(pyBrowserSettings[0], &settings)
+            SetCefWindowInfo(windowInfo, pyWindowInfo[0])
             return bool(returnValue)
         return False
+    except:
+        (exc_type, exc_value, exc_trace) = sys.exc_info()
+        sys.excepthook(exc_type, exc_value, exc_trace)
+
+
+cdef public cpp_bool LifespanHandler_OnAfterCreated(
+        CefRefPtr[CefBrowser] cefBrowser
+        ) except * with gil:
+    cdef PyBrowser pyBrowser
+    try:
+        pyBrowser = GetPyBrowser(cefBrowser)
+        callback = pyBrowser.GetClientCallback("OnAfterCreated")
+        if callback:
+            callback(pyBrowser)
     except:
         (exc_type, exc_value, exc_trace) = sys.exc_info()
         sys.excepthook(exc_type, exc_value, exc_trace)
