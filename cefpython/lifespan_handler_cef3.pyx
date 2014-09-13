@@ -2,23 +2,6 @@
 # License: New BSD License.
 # Website: http://code.google.com/p/cefpython/
 
-cdef public void LifespanHandler_OnBeforeClose(
-        CefRefPtr[CefBrowser] cefBrowser
-        ) except * with gil:
-    cdef PyBrowser pyBrowser
-    cdef object callback
-    try:
-        pyBrowser = GetPyBrowser(cefBrowser)
-        callback = pyBrowser.GetClientCallback("OnBeforeClose")
-        if callback:
-            callback(pyBrowser)
-        RemovePythonCallbacksForBrowser(pyBrowser.GetIdentifier())
-        RemovePyFramesForBrowser(pyBrowser.GetIdentifier())
-        RemovePyBrowser(pyBrowser.GetIdentifier())
-    except:
-        (exc_type, exc_value, exc_trace) = sys.exc_info()
-        sys.excepthook(exc_type, exc_value, exc_trace)
-
 cdef public cpp_bool LifespanHandler_OnBeforePopup(
         CefRefPtr[CefBrowser] cefBrowser,
         CefRefPtr[CefFrame] cefFrame,
@@ -62,7 +45,6 @@ cdef public cpp_bool LifespanHandler_OnBeforePopup(
         (exc_type, exc_value, exc_trace) = sys.exc_info()
         sys.excepthook(exc_type, exc_value, exc_trace)
 
-
 cdef public cpp_bool LifespanHandler_OnAfterCreated(
         CefRefPtr[CefBrowser] cefBrowser
         ) except * with gil:
@@ -72,6 +54,51 @@ cdef public cpp_bool LifespanHandler_OnAfterCreated(
         callback = pyBrowser.GetClientCallback("OnAfterCreated")
         if callback:
             callback(pyBrowser)
+    except:
+        (exc_type, exc_value, exc_trace) = sys.exc_info()
+        sys.excepthook(exc_type, exc_value, exc_trace)
+
+cdef public cpp_bool LifespanHandler_RunModal(
+        CefRefPtr[CefBrowser] cefBrowser
+        ) except * with gil:
+    cdef PyBrowser pyBrowser
+    try:
+        pyBrowser = GetPyBrowser(cefBrowser)
+        callback = pyBrowser.GetClientCallback("RunModal")
+        if callback:
+            return callback(pyBrowser)
+        return False
+    except:
+        (exc_type, exc_value, exc_trace) = sys.exc_info()
+        sys.excepthook(exc_type, exc_value, exc_trace)
+
+cdef public cpp_bool LifespanHandler_DoClose(
+        CefRefPtr[CefBrowser] cefBrowser
+        ) except * with gil:
+    cdef PyBrowser pyBrowser
+    try:
+        pyBrowser = GetPyBrowser(cefBrowser)
+        callback = pyBrowser.GetClientCallback("DoClose")
+        if callback:
+            return callback(pyBrowser)
+        return False
+    except:
+        (exc_type, exc_value, exc_trace) = sys.exc_info()
+        sys.excepthook(exc_type, exc_value, exc_trace)
+
+cdef public void LifespanHandler_OnBeforeClose(
+        CefRefPtr[CefBrowser] cefBrowser
+        ) except * with gil:
+    cdef PyBrowser pyBrowser
+    cdef object callback
+    try:
+        pyBrowser = GetPyBrowser(cefBrowser)
+        callback = pyBrowser.GetClientCallback("OnBeforeClose")
+        if callback:
+            callback(pyBrowser)
+        RemovePythonCallbacksForBrowser(pyBrowser.GetIdentifier())
+        RemovePyFramesForBrowser(pyBrowser.GetIdentifier())
+        RemovePyBrowser(pyBrowser.GetIdentifier())
     except:
         (exc_type, exc_value, exc_trace) = sys.exc_info()
         sys.excepthook(exc_type, exc_value, exc_trace)

@@ -130,7 +130,7 @@ bool ClientHandler::OnBeforePopup(CefRefPtr<CefBrowser> browser,
 ///
 /*--cef()--*/
 void ClientHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
-    // REQUIRE_IO_THREAD();
+    REQUIRE_UI_THREAD();
     LifespanHandler_OnAfterCreated(browser);
 }
 
@@ -141,7 +141,8 @@ void ClientHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 ///
 /*--cef()--*/
 bool ClientHandler::RunModal(CefRefPtr<CefBrowser> browser) { 
-    return false; 
+    REQUIRE_UI_THREAD();
+    return LifespanHandler_RunModal(browser);
 }
 
 ///
@@ -204,7 +205,8 @@ bool ClientHandler::RunModal(CefRefPtr<CefBrowser> browser) {
 ///
 /*--cef()--*/
 bool ClientHandler::DoClose(CefRefPtr<CefBrowser> browser) { 
-    return false; 
+    REQUIRE_UI_THREAD();
+    return LifespanHandler_DoClose(browser);
 }
 
 ///
