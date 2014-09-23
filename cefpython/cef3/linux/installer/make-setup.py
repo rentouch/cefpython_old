@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2013 The CEF Python authors. All rights reserved.
+# Copyright (c) 2012-2014 The CEF Python authors. All rights reserved.
 # License: New BSD License.
 # Website: http://code.google.com/p/cefpython/
 
@@ -105,6 +105,8 @@ def main():
             continue
         os.rename(example, package_dir+"/examples/"+os.path.basename(example))
     ret = os.system("mv "+package_dir+"/*.html "+package_dir+"/examples/")
+    ret = os.system("mv "+package_dir+"/*.js "+package_dir+"/examples/")
+    ret = os.system("mv "+package_dir+"/*.css "+package_dir+"/examples/")
     assert ret == 0
 
     print("Copying wx-subpackage to wx dir in package dir")

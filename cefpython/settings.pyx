@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2013 The CEF Python authors. All rights reserved.
+# Copyright (c) 2012-2014 The CEF Python authors. All rights reserved.
 # License: New BSD License.
 # Website: http://code.google.com/p/cefpython/
 
@@ -33,9 +33,13 @@ cdef void SetApplicationSettings(
         # cefString = CefString(&cefSettings.user_agent)
         # cefString.FromASCII(<char*>settings[key])
 
+        # ---------------------------------------------------------------------
+        # CEF 1
+        # ---------------------------------------------------------------------
         IF CEF_VERSION == 1:
-            if key == "string_encoding" or key == "debug":
-                # cefpython internal option
+            if key == "string_encoding"\
+                    or key == "debug":
+                # CEF Python only options. These are not to be found in CEF.
                 continue
             elif key == "multi_threaded_message_loop":
                 cefAppSettings.multi_threaded_message_loop = bool(appSettings[key])
@@ -95,9 +99,16 @@ cdef void SetApplicationSettings(
             else:
                 raise Exception("Invalid appSettings key: %s" % key)
 
+        # ---------------------------------------------------------------------
+        # CEF 3
+        # ---------------------------------------------------------------------
         ELIF CEF_VERSION == 3:
-            if key == "string_encoding" or key == "debug":
-                # cefpython internal option
+            if key == "string_encoding"\
+                    or key == "debug"\
+                    or key == "unique_request_context_per_browser"\
+                    or key == "downloads_enabled"\
+                    or key == "context_menu":
+                # CEF Python only options. These are not to be found in CEF.
                 continue
             elif key == "multi_threaded_message_loop":
                 cefAppSettings.multi_threaded_message_loop = bool(appSettings[key])
@@ -155,6 +166,8 @@ cdef void SetApplicationSettings(
                 cefAppSettings.remote_debugging_port = int(appSettings[key])
             elif key == "ignore_certificate_errors":
                 cefAppSettings.ignore_certificate_errors = bool(appSettings[key])
+            elif key == "background_color":
+                cefAppSettings.background_color = int(appSettings[key])
             else:
                 raise Exception("Invalid appSettings key: %s" % key)
 

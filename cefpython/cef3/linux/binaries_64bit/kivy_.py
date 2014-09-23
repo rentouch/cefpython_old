@@ -6,11 +6,13 @@
 # In this example kivy-lang is used to declare the layout which
 # contains two buttons (back, forward) and the browser view.
 
-# On Linux importing the cefpython module must be the very
-# first in your application. This is because CEF makes a global
-# tcmalloc hook for memory allocation/deallocation. See Issue 73
-# that is to provide CEF builds with tcmalloc hook disabled:
-# https://code.google.com/p/cefpython/issues/detail?id=73
+# The official CEF Python binaries come with tcmalloc hook
+# disabled. But if you've built custom binaries and kept tcmalloc
+# hook enabled, then be aware that in such case it is required
+# for the cefpython module to be the very first import in
+# python scripts. See Issue 73 in the CEF Python Issue Tracker
+# for more details.
+
 import ctypes, os, sys
 libcef_so = os.path.join(os.path.dirname(
         os.path.abspath(__file__)), 'libcef.so')
@@ -651,6 +653,19 @@ class ClientHandler:
         rect.append(width)
         rect.append(height)
         # print("GetViewRect(): %s x %s" % (width, height))
+        return True
+
+
+    def OnJavascriptDialog(self, browser, originUrl, acceptLang, dialogType,
+                   messageText, defaultPromptText, callback,
+                   suppressMessage):
+        suppressMessage[0] = True
+        return False
+
+
+    def OnBeforeUnloadJavascriptDialog(self, browser, messageText, isReload,
+            callback):
+        callback.Continue(allow=True, userInput="")
         return True
 
 

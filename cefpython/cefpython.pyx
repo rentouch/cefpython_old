@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2013 The CEF Python authors. All rights reserved.
+# Copyright (c) 2012-2014 The CEF Python authors. All rights reserved.
 # License: New BSD License.
 # Website: http://code.google.com/p/cefpython/
 
@@ -80,23 +80,31 @@
 #   "bool" in a pxd file, then Cython will complain about bool casts
 #   like "bool(1)" being invalid, in pyx files.
 
-# Global variables.
+# All .pyx files need to be included in this file.
+
+include "cython_includes/compile_time_constants.pxi"
+include "imports.pyx"
+
+# -----------------------------------------------------------------------------
+# Global variables
 
 g_debug = False
 g_debugFile = "debug.log"
 
-# When put None here and assigned a local dictionary in Initialize(), later while
-# running app this global variable was garbage collected, see topic:
+# When put None here and assigned a local dictionary in Initialize(), later 
+# while running app this global variable was garbage collected, see topic:
 # https://groups.google.com/d/topic/cython-users/0dw3UASh7HY/discussion
 g_applicationSettings = {}
 g_commandLineSwitches = {}
 
 cdef dict g_globalClientCallbacks = {}
 
-# All .pyx files need to be included here.
+# If ApplicationSettings.unique_request_context_per_browser is False
+# then a shared request context is used for all browsers. Otherwise
+# a unique one is created for each call to CreateBrowserSync.
+cdef CefRefPtr[CefRequestContext] g_sharedRequestContext
 
-include "cython_includes/compile_time_constants.pxi"
-include "imports.pyx"
+# -----------------------------------------------------------------------------
 
 include "utils.pyx"
 include "string_utils.pyx"
@@ -174,14 +182,16 @@ IF CEF_VERSION == 3:
     include "web_request_cef3.pyx"
     include "command_line.pyx"
     include "app.pyx"
+    include "javascript_dialog_handler.pyx"
+
+# -----------------------------------------------------------------------------
+# Utility functions to provide settings to the C++ browser process code.
 
 cdef public void cefpython_GetDebugOptions(
         cpp_bool* debug,
         cpp_string* debugFile
         ) except * with gil:
     # Called from subprocess/cefpython_app.cpp -> CefPythonApp constructor.
-    global g_debug
-    global g_debugFile
     cdef cpp_string cppString = g_debugFile
     try:
         debug[0] = <cpp_bool>bool(g_debug)
@@ -190,15 +200,32 @@ cdef public void cefpython_GetDebugOptions(
         (exc_type, exc_value, exc_trace) = sys.exc_info()
         sys.excepthook(exc_type, exc_value, exc_trace)
 
-# Linux issue:
-# ------------
-# Try not to run any of the CEF code until Initialize() is called.
-# Do not allocate any memory on the heap until Initialize() is called.
-# CEF hooks up its own tcmalloc globally when the library is loaded,
-# but the memory allocation implementation may still be changed by
-# another library (wx/gtk) before Initialize() is called.
-# See Issue 73:
-# https://code.google.com/p/cefpython/issues/detail?id=73
+cdef public cpp_bool ApplicationSettings_GetBool(const char* key
+        ) except * with gil:
+    # Called from client_handler/client_handler.cpp for example
+    cdef py_string pyKey = CharToPyString(key)
+    if pyKey in g_applicationSettings:
+        return bool(g_applicationSettings[pyKey])
+    return False
+
+cdef public cpp_bool ApplicationSettings_GetBoolFromDict(const char* key1,
+        const char* key2) except * with gil:
+    cdef py_string pyKey1 = CharToPyString(key1)
+    cdef py_string pyKey2 = CharToPyString(key2)
+    cdef object dictValue # Yet to be checked whether it is `dict`
+    if pyKey1 in g_applicationSettings:
+        dictValue = g_applicationSettings[pyKey1]
+        if type(dictValue) != dict:
+            return False
+        if pyKey2 in dictValue:
+            return bool(dictValue[pyKey2])
+    return False
+
+# -----------------------------------------------------------------------------
+
+# If you've built custom binaries with tcmalloc hook enabled on
+# Linux, then do not to run any of the CEF code until Initialize()
+# is called. See Issue 73 in the CEF Python Issue Tracker.
 
 def Initialize(applicationSettings=None, commandLineSwitches=None):
     if not applicationSettings:
@@ -212,13 +239,46 @@ def Initialize(applicationSettings=None, commandLineSwitches=None):
     if "log_file" in applicationSettings:
         g_debugFile = applicationSettings["log_file"]
 
-    Debug("-" * 60)
     Debug("Initialize() called")
 
+    # -------------------------------------------------------------------------
+    # CEF Python only options - default values
+
+    if "debug" not in applicationSettings:
+        applicationSettings["debug"] = False
+    if "string_encoding" not in applicationSettings:
+        applicationSettings["string_encoding"] = "utf-8"
+    if "unique_request_context_per_browser" not in applicationSettings:
+        applicationSettings["unique_request_context_per_browser"] = False
+    if "downloads_enabled" not in applicationSettings:
+        applicationSettings["downloads_enabled"] = True
+    if "remote_debugging_port" not in applicationSettings:
+        applicationSettings["remote_debugging_port"] = 0
+
+    # Mouse context menu
+    if "context_menu" not in applicationSettings:
+        applicationSettings["context_menu"] = {}
+    menuItems = ["enabled", "navigation", "print", "view_source",\
+            "external_browser", "devtools"]
+    for item in menuItems:
+        if item not in applicationSettings["context_menu"]:
+            applicationSettings["context_menu"][item] = True
+
+    # Remote debugging port. If value is 0 we will generate a random
+    # port. To disable remote debugging set value to -1.
+    if applicationSettings["remote_debugging_port"] == 0:
+        # Generate a random port.  
+        applicationSettings["remote_debugging_port"] =\
+                random.randint(49152, 65535) 
+    elif applicationSettings["remote_debugging_port"] == -1:
+        # Disable remote debugging
+        applicationSettings["remote_debugging_port"] = 0
+
+    # -------------------------------------------------------------------------
+
+    # CEF options - default values.
     if not "multi_threaded_message_loop" in applicationSettings:
         applicationSettings["multi_threaded_message_loop"] = False
-    if not "string_encoding" in applicationSettings:
-        applicationSettings["string_encoding"] = "utf-8"
     IF CEF_VERSION == 3:
         if not "single_process" in applicationSettings:
             applicationSettings["single_process"] = False
@@ -270,7 +330,7 @@ def Initialize(applicationSettings=None, commandLineSwitches=None):
         Debug("CefInitialize() failed")
     return ret
 
-def CreateBrowserSync(windowInfo, browserSettings, navigateUrl):
+def CreateBrowserSync(windowInfo, browserSettings, navigateUrl, requestContext=None):
     Debug("CreateBrowserSync() called")
     assert IsThread(TID_UI), (
             "cefpython.CreateBrowserSync() may only be called on the UI thread")
@@ -293,16 +353,44 @@ def CreateBrowserSync(windowInfo, browserSettings, navigateUrl):
     cdef CefRefPtr[ClientHandler] clientHandler =\
             <CefRefPtr[ClientHandler]?>new ClientHandler()
     cdef CefRefPtr[CefBrowser] cefBrowser
+
+    # Request context - part 1/2.
+    createSharedRequestContext = bool(not g_sharedRequestContext.get())
+    cdef CefRefPtr[CefRequestContext] cefRequestContext
+    cdef CefRefPtr[RequestContextHandler] requestContextHandler =\
+            <CefRefPtr[RequestContextHandler]?>new RequestContextHandler(\
+                    cefBrowser)
+    if g_applicationSettings["unique_request_context_per_browser"]:
+        cefRequestContext = CefRequestContext_CreateContext(\
+                <CefRefPtr[CefRequestContextHandler]?>requestContextHandler)
+    else:
+        if createSharedRequestContext:
+            cefRequestContext = CefRequestContext_CreateContext(\
+                    <CefRefPtr[CefRequestContextHandler]?>\
+                            requestContextHandler)
+            g_sharedRequestContext.Assign(cefRequestContext.get())
+        else:
+            cefRequestContext.Assign(g_sharedRequestContext.get())
+
+    # CEF browser creation.
     with nogil:
         cefBrowser = cef_browser_static.CreateBrowserSync(
                 cefWindowInfo, <CefRefPtr[CefClient]?>clientHandler,
-                cefNavigateUrl, cefBrowserSettings)
+                cefNavigateUrl, cefBrowserSettings,
+                cefRequestContext)
 
-    if <void*>cefBrowser == NULL:
+    if <void*>cefBrowser == NULL or not cefBrowser.get():
         Debug("CefBrowser::CreateBrowserSync() failed")
         return None
     else:
         Debug("CefBrowser::CreateBrowserSync() succeeded")
+
+    # Request context - part 2/2.
+    if g_applicationSettings["unique_request_context_per_browser"]:
+        requestContextHandler.get().SetBrowser(cefBrowser)
+    else:
+        if createSharedRequestContext:
+            requestContextHandler.get().SetBrowser(cefBrowser)
 
     cdef PyBrowser pyBrowser = GetPyBrowser(cefBrowser)
     pyBrowser.SetUserData("__outerWindowHandle", int(windowInfo.parentWindowHandle))
@@ -345,6 +433,11 @@ def QuitMessageLoop():
         CefQuitMessageLoop()
 
 def Shutdown():
+    if g_sharedRequestContext.get():
+        # A similar release is done in RemovePyBrowser and CloseBrowser.
+        # This one is probably redundant. Additional testing should be done.
+        Debug("Shutdown: releasing shared request context")
+        g_sharedRequestContext.Assign(NULL)
     Debug("Shutdown()")
     with nogil:
         CefShutdown()

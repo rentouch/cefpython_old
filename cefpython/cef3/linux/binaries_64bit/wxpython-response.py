@@ -1,3 +1,7 @@
+# An example of embedding CEF browser in wxPython on Linux.
+# Tested with wxPython 2.8.12.1 (gtk2-unicode).
+# To install wxPython type "sudo apt-get install python-wxtools".
+
 # This example implements a custom "_OnResourceResponse" callback
 # that emulates reading response by utilizing Resourcehandler
 # and WebRequest.
@@ -5,14 +9,12 @@
 FIX_ENCODING_BUG = True
 BROWSER_DEFAULT_ENCODING = "utf-8"
 
-# An example of embedding CEF browser in wxPython on Linux.
-
-# Important:
-#   On Linux importing the cefpython module must be
-#   the very first in your application. This is because CEF makes
-#   a global tcmalloc hook for memory allocation/deallocation.
-#   See Issue 73 that is to provide CEF builds with tcmalloc disabled:
-#   https://code.google.com/p/cefpython/issues/detail?id=73
+# The official CEF Python binaries come with tcmalloc hook
+# disabled. But if you've built custom binaries and kept tcmalloc
+# hook enabled, then be aware that in such case it is required
+# for the cefpython module to be the very first import in
+# python scripts. See Issue 73 in the CEF Python Issue Tracker
+# for more details.
 
 import ctypes, os, sys
 libcef_so = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'libcef.so')
@@ -141,9 +143,12 @@ class ResourceHandler:
         self._responseHeadersReadyCallback = callback
         self._webRequestClient = WebRequestClient()
         self._webRequestClient._resourceHandler = self
-        # To skip cache:
-        # | request.SetFlags(cefpython.Request.Flags["SkipCache"])
-        # Must keep a strong reference to the WebRequest() object.
+        # Need to set AllowCacheCredentials and AllowCookies for
+        # the cookies to work during POST requests (Issue 127).
+        # To skip cache set the SkipCache request flag.
+        request.SetFlags(cefpython.Request.Flags["AllowCachedCredentials"]\
+                | cefpython.Request.Flags["AllowCookies"])
+        # A strong reference to the WebRequest object must kept.
         self._webRequest = cefpython.WebRequest.Create(
                 request, self._webRequestClient)
         return True
@@ -370,8 +375,17 @@ class MainFrame(wx.Frame):
         self.SetMenuBar(menubar)
 
     def OnClose(self, event):
-        self.browser.CloseBrowser()
-        self.Destroy()
+        # In wx.chromectrl calling browser.CloseBrowser() and/or
+        # self.Destroy() in OnClose is causing crashes when embedding
+        # multiple browser tabs. The solution is to call only 
+        # browser.ParentWindowWillClose. Behavior of this example
+        # seems different as it extends wx.Frame, while ChromeWindow
+        # from chromectrl extends wx.Window. Calling CloseBrowser
+        # and Destroy does not cause crashes, but is not recommended.
+        # Call ParentWindowWillClose and event.Skip() instead. See 
+        # also Issue 107.
+        self.browser.ParentWindowWillClose()
+        event.Skip()
 
     def OnIdle(self, event):
         cefpython.MessageLoopWork()

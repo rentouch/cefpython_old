@@ -11,6 +11,13 @@ bool V8FunctionHandler::Execute(const CefString& functionName,
                         const CefV8ValueList& v8Arguments,
                         CefRefPtr<CefV8Value>& returnValue,
                         CefString& exception) {
+    if (!CefV8Context::InContext()) {
+        // CefV8Context::GetCurrentContext may not be called when
+        // not in a V8 context.
+        DebugLog("Renderer: V8FunctionHandler::Execute() FAILED:"\
+                " not inside a V8 context");
+        return false;
+    }
     CefRefPtr<CefV8Context> context =  CefV8Context::GetCurrentContext();
     CefRefPtr<CefBrowser> browser = context.get()->GetBrowser();
     CefRefPtr<CefFrame> frame = context.get()->GetFrame();
@@ -32,7 +39,7 @@ bool V8FunctionHandler::Execute(const CefString& functionName,
         if (!(cefPythonApp_.get() \
                 && cefPythonApp_->BindedFunctionExists( \
                         browser, functionName))) {
-            exception = std::string("cefpython: " \
+            exception = std::string("[CEF Python] " \
                     "V8FunctionHandler::Execute() FAILED: " \
                     "function does not exist: ").append(functionName) \
                     .append("()");

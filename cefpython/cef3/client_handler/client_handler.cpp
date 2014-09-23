@@ -2,9 +2,56 @@
 // License: New BSD License.
 // Website: http://code.google.com/p/cefpython/
 
+// ClientHandler code is running in the Browser process only.
+
 #include "client_handler.h"
 #include "cefpython_public_api.h"
 #include "DebugLog.h"
+
+#if defined(OS_WIN)
+#include <Shellapi.h>
+#pragma comment(lib, "Shell32.lib")
+#elif defined(OS_LINUX)
+#include <unistd.h>
+#include <stdlib.h>
+#endif
+
+// ----------------------------------------------------------------------------
+// Linux equivalent of ShellExecute
+// ----------------------------------------------------------------------------
+
+#if defined(OS_LINUX)
+void OpenInExternalBrowser(const std::string& url)
+{
+    if (url.empty()) {
+        DebugLog("Browser: OpenInExternalBrowser() FAILED: url is empty");
+        return;
+    }
+    std::string msg = "Browser: OpenInExternalBrowser(): url=";
+    msg.append(url.c_str());
+    DebugLog(msg.c_str());
+
+    // xdg-open is a desktop-independent tool for running
+    // default applications. Installed by default on Ubuntu.
+    // xdg-open process is running in the backround until 
+    // cefpython app closes.
+    std::string prog = "xdg-open";
+
+    // Using system() opens up for bugs and exploits, not
+    // recommended.
+    
+    // Fork yourself and run in parallel, do not block the
+    // current proces.
+    char *args[3];
+    args[0] = (char*) prog.c_str();
+    args[1] = (char*) url.c_str();
+    args[2] = 0;
+    pid_t pid = fork();
+    if (!pid) {
+        execvp(prog.c_str(), args);
+    }
+}
+#endif
 
 // ----------------------------------------------------------------------------
 // CefClient
@@ -233,19 +280,6 @@ void ClientHandler::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 ///
 
 ///
-// Called when the loading state has changed.
-///
-/*--cef()--*/
-void ClientHandler::OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
-                                bool isLoading,
-                                bool canGoBack,
-                                bool canGoForward) {
-    REQUIRE_UI_THREAD();
-    DisplayHandler_OnLoadingStateChange(browser, isLoading, canGoBack,
-            canGoForward);
-}
-
-///
 // Called when a frame's address has changed.
 ///
 /*--cef()--*/
@@ -361,7 +395,7 @@ bool ClientHandler::OnKeyEvent(CefRefPtr<CefBrowser> browser,
 // Called on the UI thread before browser navigation. Return true to cancel
 // the navigation or false to allow the navigation to proceed. The |request|
 // object cannot be modified in this callback.
-// CefDisplayHandler::OnLoadingStateChange will be called twice in all cases.
+// CefLoadHandler::OnLoadingStateChange will be called twice in all cases.
 // If the navigation is allowed CefLoadHandler::OnLoadStart and
 // CefLoadHandler::OnLoadEnd will be called. If the navigation is canceled
 // CefLoadHandler::OnLoadError will be called with an |errorCode| value of
@@ -461,21 +495,6 @@ bool ClientHandler::OnQuotaRequest(CefRefPtr<CefBrowser> browser,
 }
 
 ///
-// Called on the IO thread to retrieve the cookie manager. |main_url| is the
-// URL of the top-level frame. Cookies managers can be unique per browser or
-// shared across multiple browsers. The global cookie manager will be used if
-// this method returns NULL.
-///
-/*--cef()--*/
-CefRefPtr<CefCookieManager> ClientHandler::GetCookieManager(
-                                              CefRefPtr<CefBrowser> browser,
-                                              const CefString& main_url) {
-    REQUIRE_IO_THREAD();
-    return RequestHandler_GetCookieManager(browser, main_url);
-    // Default: return NULL.
-}
-
-///
 // Called on the UI thread to handle requests for URLs with an unknown
 // protocol component. Set |allow_os_execution| to true to attempt execution
 // via the registered OS protocol handler, if any.
@@ -524,6 +543,29 @@ bool ClientHandler::OnCertificateError(
     // Default: return false;
 }
 
+///
+// Called when the render process terminates unexpectedly. |status| indicates
+// how the process terminated.
+///
+/*--cef()--*/
+void ClientHandler::OnRenderProcessTerminated(CefRefPtr<CefBrowser> browser,
+                                     cef_termination_status_t status) {
+    REQUIRE_UI_THREAD();
+    DebugLog("Browser: OnRenderProcessTerminated()");
+    RequestHandler_OnRendererProcessTerminated(browser, status);
+}
+
+///
+// Called when a plugin has crashed. |plugin_path| is the path of the plugin
+// that crashed.
+///
+/*--cef()--*/
+void ClientHandler::OnPluginCrashed(CefRefPtr<CefBrowser> browser,
+                           const CefString& plugin_path) {
+    REQUIRE_UI_THREAD();
+    RequestHandler_OnPluginCrashed(browser, plugin_path);
+}
+
 // --------------------------------------------------------------------------
 // CefLoadHandler
 // --------------------------------------------------------------------------
@@ -532,6 +574,19 @@ bool ClientHandler::OnCertificateError(
 // Implement this interface to handle events related to browser load status. 
 // The methods of this class will be called on the UI thread.
 ///
+
+///
+// Called when the loading state has changed.
+///
+/*--cef()--*/
+void ClientHandler::OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
+                                bool isLoading,
+                                bool canGoBack,
+                                bool canGoForward) {
+    REQUIRE_UI_THREAD();
+    LoadHandler_OnLoadingStateChange(browser, isLoading, canGoBack,
+            canGoForward);
+}
 
 ///
 // Called when the browser begins loading a frame. The |frame| value will
@@ -578,29 +633,6 @@ void ClientHandler::OnLoadError(CefRefPtr<CefBrowser> browser,
                        const CefString& failedUrl) {
     REQUIRE_UI_THREAD();
     LoadHandler_OnLoadError(browser, frame, errorCode, errorText, failedUrl);
-}
-
-///
-// Called when the render process terminates unexpectedly. |status| indicates
-// how the process terminated.
-///
-/*--cef()--*/
-void ClientHandler::OnRenderProcessTerminated(CefRefPtr<CefBrowser> browser,
-                                     cef_termination_status_t status) {
-    REQUIRE_UI_THREAD();
-    DebugLog("Browser: OnRenderProcessTerminated()");
-    LoadHandler_OnRendererProcessTerminated(browser, status);
-}
-
-///
-// Called when a plugin has crashed. |plugin_path| is the path of the plugin
-// that crashed.
-///
-/*--cef()--*/
-void ClientHandler::OnPluginCrashed(CefRefPtr<CefBrowser> browser,
-                           const CefString& plugin_path) {
-    REQUIRE_UI_THREAD();
-    LoadHandler_OnPluginCrashed(browser, plugin_path);
 }
 
 // ----------------------------------------------------------------------------
@@ -722,3 +754,253 @@ void ClientHandler::OnScrollOffsetChanged(CefRefPtr<CefBrowser> browser) {
     REQUIRE_UI_THREAD();
     RenderHandler_OnScrollOffsetChanged(browser);
 }
+
+
+// ----------------------------------------------------------------------------
+// CefJSDialogHandler
+// ----------------------------------------------------------------------------
+///
+// Called to run a JavaScript dialog. The |default_prompt_text| value will be
+// specified for prompt dialogs only. Set |suppress_message| to true and
+// return false to suppress the message (suppressing messages is preferable
+// to immediately executing the callback as this is used to detect presumably
+// malicious behavior like spamming alert messages in onbeforeunload). Set
+// |suppress_message| to false and return false to use the default
+// implementation (the default implementation will show one modal dialog at a
+// time and suppress any additional dialog requests until the displayed dialog
+// is dismissed). Return true if the application will use a custom dialog or
+// if the callback has been executed immediately. Custom dialogs may be either
+// modal or modeless. If a custom dialog is used the application must execute
+// |callback| once the custom dialog is dismissed.
+///
+/*--cef(optional_param=accept_lang,optional_param=message_text,
+      optional_param=default_prompt_text)--*/
+bool ClientHandler::OnJSDialog(CefRefPtr<CefBrowser> browser,
+                  const CefString& origin_url,
+                  const CefString& accept_lang,
+                  JSDialogType dialog_type,
+                  const CefString& message_text,
+                  const CefString& default_prompt_text,
+                  CefRefPtr<CefJSDialogCallback> callback,
+                  bool& suppress_message) {
+    REQUIRE_UI_THREAD();
+    return JavascriptDialogHandler_OnJavascriptDialog(browser, origin_url,
+            accept_lang, dialog_type, message_text, default_prompt_text,
+            callback, suppress_message);
+}
+
+///
+// Called to run a dialog asking the user if they want to leave a page. Return
+// false to use the default dialog implementation. Return true if the
+// application will use a custom dialog or if the callback has been executed
+// immediately. Custom dialogs may be either modal or modeless. If a custom
+// dialog is used the application must execute |callback| once the custom
+// dialog is dismissed.
+///
+/*--cef(optional_param=message_text)--*/
+bool ClientHandler::OnBeforeUnloadDialog(CefRefPtr<CefBrowser> browser,
+                            const CefString& message_text,
+                            bool is_reload,
+                            CefRefPtr<CefJSDialogCallback> callback) {
+    REQUIRE_UI_THREAD();
+    return JavascriptDialogHandler_OnBeforeUnloadJavascriptDialog(browser,
+            message_text, is_reload, callback);
+}
+
+///
+// Called to cancel any pending dialogs and reset any saved dialog state. Will
+// be called due to events like page navigation irregardless of whether any
+// dialogs are currently pending.
+///
+/*--cef()--*/
+void ClientHandler::OnResetDialogState(CefRefPtr<CefBrowser> browser) {
+    REQUIRE_UI_THREAD();
+    return JavascriptDialogHandler_OnResetJavascriptDialogState(browser);
+}
+
+///
+// Called when the default implementation dialog is closed.
+///
+/*--cef()--*/
+void ClientHandler::OnDialogClosed(CefRefPtr<CefBrowser> browser) {
+    REQUIRE_UI_THREAD();
+    return JavascriptDialogHandler_OnJavascriptDialogClosed(browser);
+}
+
+// ----------------------------------------------------------------------------
+// CefDownloadHandler
+// ----------------------------------------------------------------------------
+
+///
+// Class used to handle file downloads. The methods of this class will called
+// on the browser process UI thread.
+///
+
+///
+// Called before a download begins. |suggested_name| is the suggested name for
+// the download file. By default the download will be canceled. Execute
+// |callback| either asynchronously or in this method to continue the download
+// if desired. Do not keep a reference to |download_item| outside of this
+// method.
+///
+/*--cef()--*/
+void ClientHandler::OnBeforeDownload(CefRefPtr<CefBrowser> browser,
+                        CefRefPtr<CefDownloadItem> download_item,
+                        const CefString& suggested_name,
+                        CefRefPtr<CefBeforeDownloadCallback> callback) {
+    REQUIRE_UI_THREAD();
+    bool downloads_enabled = ApplicationSettings_GetBool("downloads_enabled");
+    if (downloads_enabled) {
+        std::string msg = "Browser: About to download file: ";
+        msg.append(suggested_name.ToString().c_str());
+        DebugLog(msg.c_str());
+        callback->Continue(suggested_name, true);
+    } else {
+        DebugLog("Browser: Tried to download file, but downloads are disabled");
+    }
+}
+
+///
+// Called when a download's status or progress information has been updated.
+// This may be called multiple times before and after OnBeforeDownload().
+// Execute |callback| either asynchronously or in this method to cancel the
+// download if desired. Do not keep a reference to |download_item| outside of
+// this method.
+///
+/*--cef()--*/
+void ClientHandler::OnDownloadUpdated(
+        CefRefPtr<CefBrowser> browser,
+        CefRefPtr<CefDownloadItem> download_item,
+        CefRefPtr<CefDownloadItemCallback> callback) {
+    REQUIRE_UI_THREAD();
+    if (download_item->IsComplete()) {
+        std::string msg = "Browser: Download completed, saved to: ";
+        msg.append(download_item->GetFullPath().ToString().c_str());
+        DebugLog(msg.c_str());
+    } else if (download_item->IsCanceled()) {
+        DebugLog("Browser: Download was cancelled");
+    }
+}
+
+// ----------------------------------------------------------------------------
+// CefContextMenuHandler
+// ----------------------------------------------------------------------------
+
+#define _MENU_ID_DEVTOOLS                         MENU_ID_USER_FIRST + 1
+#define _MENU_ID_RELOAD_PAGE                      MENU_ID_USER_FIRST + 2
+#define _MENU_ID_OPEN_PAGE_IN_EXTERNAL_BROWSER    MENU_ID_USER_FIRST + 3
+#define _MENU_ID_OPEN_FRAME_IN_EXTERNAL_BROWSER   MENU_ID_USER_FIRST + 4
+
+///
+// Called before a context menu is displayed. |params| provides information
+// about the context menu state. |model| initially contains the default
+// context menu. The |model| can be cleared to show no context menu or
+// modified to show a custom menu. Do not keep references to |params| or
+// |model| outside of this callback.
+///
+/*--cef()--*/
+void ClientHandler::OnBeforeContextMenu(CefRefPtr<CefBrowser> browser,
+                                CefRefPtr<CefFrame> frame,
+                                CefRefPtr<CefContextMenuParams> params,
+                                CefRefPtr<CefMenuModel> model) {
+    bool enabled = ApplicationSettings_GetBoolFromDict(\
+            "context_menu", "enabled");
+    bool navigation = ApplicationSettings_GetBoolFromDict(\
+            "context_menu", "navigation");
+    bool print = ApplicationSettings_GetBoolFromDict(\
+            "context_menu", "print");
+    bool view_source = ApplicationSettings_GetBoolFromDict(\
+            "context_menu", "view_source");
+    bool external_browser = ApplicationSettings_GetBoolFromDict(\
+            "context_menu", "external_browser");
+    bool devtools = ApplicationSettings_GetBoolFromDict(\
+            "context_menu", "devtools");
+
+    if (!enabled) {
+        model->Clear();
+        return;
+    }
+    if (!navigation) {
+        model->Remove(MENU_ID_BACK);
+        model->Remove(MENU_ID_FORWARD);
+        // Remove separator
+        model->RemoveAt(0);
+    }
+    if (!print) {
+        model->Remove(MENU_ID_PRINT);
+    }
+    if (!view_source) {
+        model->Remove(MENU_ID_VIEW_SOURCE);
+    }
+    if (!params->IsEditable() && params->GetSelectionText().empty()
+            && (params->GetPageUrl().length()
+                || params->GetFrameUrl().length())) {
+        if (external_browser) {
+            model->AddItem(_MENU_ID_OPEN_PAGE_IN_EXTERNAL_BROWSER,
+                    "Open in external browser");
+            if (params->GetFrameUrl().length()
+                    && params->GetPageUrl() != params->GetFrameUrl()) {
+                model->AddItem(_MENU_ID_OPEN_FRAME_IN_EXTERNAL_BROWSER,
+                        "Open frame in external browser");
+            }
+        }
+        if (navigation) {
+            model->InsertItemAt(2, _MENU_ID_RELOAD_PAGE, "Reload");
+        }
+        if (devtools) {
+            model->AddSeparator();
+            model->AddItem(_MENU_ID_DEVTOOLS, "Developer Tools");
+        }
+    }
+}
+
+///
+// Called to execute a command selected from the context menu. Return true if
+// the command was handled or false for the default implementation. See
+// cef_menu_id_t for the command ids that have default implementations. All
+// user-defined command ids should be between MENU_ID_USER_FIRST and
+// MENU_ID_USER_LAST. |params| will have the same values as what was passed to
+// OnBeforeContextMenu(). Do not keep a reference to |params| outside of this
+// callback.
+///
+/*--cef()--*/
+bool ClientHandler::OnContextMenuCommand(CefRefPtr<CefBrowser> browser,
+                                CefRefPtr<CefFrame> frame,
+                                CefRefPtr<CefContextMenuParams> params,
+                                int command_id,
+                                EventFlags event_flags) {
+    if (command_id == _MENU_ID_OPEN_PAGE_IN_EXTERNAL_BROWSER) {
+#if defined(OS_WIN)
+        ShellExecute(0, L"open", params->GetPageUrl().ToWString().c_str(),
+                0, 0, SW_SHOWNORMAL);
+#elif defined(OS_LINUX)
+        OpenInExternalBrowser(params->GetPageUrl().ToString());
+#endif
+        return true;
+    } else if (command_id == _MENU_ID_OPEN_FRAME_IN_EXTERNAL_BROWSER) {
+#if defined(OS_WIN)
+        ShellExecute(0, L"open", params->GetFrameUrl().ToWString().c_str(),
+                0, 0, SW_SHOWNORMAL);
+#elif defined(OS_LINUX)
+        OpenInExternalBrowser(params->GetFrameUrl().ToString());
+#endif
+        return true;
+    } else if (command_id == _MENU_ID_RELOAD_PAGE) {
+        browser->ReloadIgnoreCache();
+        return true;
+    } else if (command_id == _MENU_ID_DEVTOOLS) {
+        PyBrowser_ShowDevTools(browser);
+        return true;
+    }
+    return false;
+}
+
+///
+// Called when the context menu is dismissed irregardless of whether the menu
+// was empty or a command was selected.
+///
+/*--cef()--*/
+void ClientHandler::OnContextMenuDismissed(CefRefPtr<CefBrowser> browser,
+                                    CefRefPtr<CefFrame> frame) {
+}
+

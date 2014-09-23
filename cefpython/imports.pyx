@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2013 The CEF Python authors. All rights reserved.
+# Copyright (c) 2012-2014 The CEF Python authors. All rights reserved.
 # License: New BSD License.
 # Website: http://code.google.com/p/cefpython/
 
@@ -15,6 +15,7 @@ import inspect # used by JavascriptBindings.__SetObjectMethods()
 import urllib
 import json
 import datetime
+import random
 
 if sys.version_info.major == 2:
     import urlparse
@@ -82,6 +83,8 @@ cimport ctime
 
 IF UNAME_SYSNAME == "Windows":
     from windows cimport *
+IF UNAME_SYSNAME == "Linux":
+    from linux cimport *
 
 from cpp_utils cimport *
 
@@ -106,10 +109,10 @@ from cef_frame cimport *
 # cannot cimport *, that would cause name conflicts with constants.
 cimport cef_types
 ctypedef cef_types.cef_paint_element_type_t PaintElementType
-IF CEF_VERSION == 3:
-    from cef_types cimport CefKeyEvent
-    from cef_types cimport CefMouseEvent
-    from cef_types cimport CefScreenInfo
+ctypedef cef_types.cef_jsdialog_type_t JSDialogType
+from cef_types cimport CefKeyEvent
+from cef_types cimport CefMouseEvent
+from cef_types cimport CefScreenInfo
 
 # cannot cimport *, name conflicts
 IF UNAME_SYSNAME == "Windows":
@@ -168,3 +171,7 @@ IF CEF_VERSION == 3:
     from cef_urlrequest_cef3 cimport *
     from web_request_client_cef3 cimport *
     from cef_command_line cimport *
+    from cef_request_context cimport *
+    from cef_request_context_handler cimport *
+    from request_context_handler cimport *
+    from cef_jsdialog_handler cimport *

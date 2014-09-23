@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2013 The CEF Python authors. All rights reserved.
+# Copyright (c) 2012-2014 The CEF Python authors. All rights reserved.
 # License: New BSD License.
 # Website: http://code.google.com/p/cefpython/
 
@@ -34,8 +34,8 @@ cdef public cpp_bool LifespanHandler_OnBeforePopup(
         callback = pyBrowser.GetClientCallback("OnBeforePopup")
         if callback:
             returnValue = bool(callback(pyBrowser, pyFrame, pyTargetUrl,
-                    pyTargetFrameName, None, pyWindowInfo, None, pyBrowserSettings, 
-                    pyNoJavascriptAccess))
+                    pyTargetFrameName, None, pyWindowInfo, None,
+                    pyBrowserSettings, pyNoJavascriptAccess))
             noJavascriptAccess[0] = <cpp_bool>bool(pyNoJavascriptAccess[0])
             SetBrowserSettings(pyBrowserSettings[0], &settings)
             SetCefWindowInfo(windowInfo, pyWindowInfo[0])

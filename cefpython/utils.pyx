@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2013 The CEF Python authors. All rights reserved.
+# Copyright (c) 2012-2014 The CEF Python authors. All rights reserved.
 # License: New BSD License.
 # Website: http://code.google.com/p/cefpython/
 
@@ -25,14 +25,14 @@ cpdef py_bool IsThread(int threadID):
 cpdef object Debug(str msg):
     if not g_debug:
         return
-    msg = "cefpython: "+str(msg)
+    msg = "[CEF Python] "+str(msg)
     print(msg)
     if g_debugFile:
         try:
             with open(g_debugFile, "a") as file:
                 file.write(msg+"\n")
         except:
-            print("cefpython: WARNING: failed writing to debug file: %s" % (
+            print("[CEF Python] WARNING: failed writing to debug file: %s" % (
                     g_debugFile))
 
 
@@ -55,6 +55,9 @@ cpdef str GetNavigateUrl(py_string url):
         # >> %E6%A1%8C%E9%9D%A2
         url = urllib_pathname2url(url)
         url = re.sub("^file%3A", "file:", url)
+        # Allow hash when loading urls. The pathname2url function
+        # replaced hashes with "%23" (Issue 114).
+        url = url.replace("%23", "#")
     return str(url)
 
 IF CEF_VERSION == 1:

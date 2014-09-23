@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2013 The CEF Python authors. All rights reserved.
+# Copyright (c) 2012-2014 The CEF Python authors. All rights reserved.
 # License: New BSD License.
 # Website: http://code.google.com/p/cefpython/
 
@@ -92,6 +92,12 @@ IF CEF_VERSION == 3:
         # TODO: call this function also in CEF 1.
         global g_pyBrowsers
         if browserId in g_pyBrowsers:
+            if len(g_pyBrowsers) == 1:
+                # This is the last browser remaining.
+                if g_sharedRequestContext.get():
+                    # A similar release is done in Shutdown and CloseBrowser.
+                    Debug("RemovePyBrowser: releasing shared request context")
+                    g_sharedRequestContext.Assign(NULL)
             Debug("del g_pyBrowsers[%s]" % browserId)
             del g_pyBrowsers[browserId]
         else:
@@ -106,6 +112,19 @@ cpdef PyBrowser GetBrowserByWindowHandle(WindowHandle windowHandle):
                 pyBrowser.GetUserData("__outerWindowHandle") == long(windowHandle)):
             return pyBrowser
     return None
+
+cdef public void PyBrowser_ShowDevTools(CefRefPtr[CefBrowser] cefBrowser
+        ) except * with gil:
+    # Called from ClientHandler::OnContextMenuCommand
+    cdef PyBrowser pyBrowser
+    try:
+        pyBrowser = GetPyBrowser(cefBrowser)
+        pyBrowser.ShowDevTools()
+    except:
+        (exc_type, exc_value, exc_trace) = sys.exc_info()
+        sys.excepthook(exc_type, exc_value, exc_trace)
+
+# -----------------------------------------------------------------------------
 
 cdef class PyBrowser:
     cdef CefRefPtr[CefBrowser] cefBrowser
@@ -157,6 +176,9 @@ cdef class PyBrowser:
         ELIF CEF_VERSION == 3:
             self.SetClientCallback_CEF3(name, callback)
 
+    # -------------------------------------------------------------------------
+    # CEF 1
+    # -------------------------------------------------------------------------
     cpdef py_void SetClientCallback_CEF1(self, 
             py_string name, object callback):
         if not self.allowedClientCallbacks:
@@ -174,6 +196,7 @@ cdef class PyBrowser:
                     "OnResourceResponse", "OnProtocolExecution",
                     "GetDownloadHandler", "GetAuthCredentials",
                     "GetCookieManager"]
+            
             # CefDisplayHandler.
             self.allowedClientCallbacks += ["OnAddressChange",
                     "OnConsoleMessage", "OnContentsSizeChange",
@@ -193,11 +216,14 @@ cdef class PyBrowser:
                             "callback: %s" % name)
         self.clientCallbacks[name] = callback
 
+    # -------------------------------------------------------------------------
+    # CEF 3
+    # -------------------------------------------------------------------------
     cpdef py_void SetClientCallback_CEF3(self, 
             py_string name, object callback):
         if not self.allowedClientCallbacks:
             # DisplayHandler
-            self.allowedClientCallbacks += ["OnLoadingStateChange",
+            self.allowedClientCallbacks += [
                     "OnAddressChange", "OnTitleChange", "OnTooltip",
                     "OnStatusMessage", "OnConsoleMessage"]
             # KeyboardHandler
@@ -207,21 +233,29 @@ cdef class PyBrowser:
             # set using cefpython.SetGlobalClientCallback()
             self.allowedClientCallbacks += ["OnBeforeResourceLoad",
                     "OnResourceRedirect", "GetAuthCredentials",
-                    "OnQuotaRequest", "GetCookieManager",
-                    "OnProtocolExecution", "GetResourceHandler",
-                    "OnBeforeBrowse"]
-            # LoadHandler
-            self.allowedClientCallbacks += ["OnLoadStart", "OnLoadEnd",
-                    "OnLoadError", "OnRendererProcessTerminated",
+                    "OnQuotaRequest", "OnProtocolExecution", 
+                    "GetResourceHandler",
+                    "OnBeforeBrowse", "OnRendererProcessTerminated",
                     "OnPluginCrashed"]
+            # RequestContextHandler
+            self.allowedClientCallbacks += ["GetCookieManager"]
+            # LoadHandler
+            self.allowedClientCallbacks += ["OnLoadingStateChange", 
+                    "OnLoadStart", "OnLoadEnd", "OnLoadError"]
             # LifespanHandler
-            self.allowedClientCallbacks += ["OnBeforePopup", "OnAfterCreated", 
+            self.allowedClientCallbacks += ["OnBeforePopup", "OnAfterCreated",
                     "RunModal", "DoClose", "OnBeforeClose"]
             # RenderHandler
             self.allowedClientCallbacks += ["GetRootScreenRect",
                     "GetViewRect", "GetScreenPoint", "GetScreenInfo",
                     "OnPopupShow", "OnPopupSize", "OnPaint", "OnCursorChange",
                     "OnScrollOffsetChanged"]
+            # JavascriptDialogHandler
+            self.allowedClientCallbacks += ["OnJavascriptDialog",
+                    "OnBeforeUnloadJavascriptDialog",
+                    "OnResetJavascriptDialogState",
+                    "OnJavascriptDialogClosed"]
+
         if name not in self.allowedClientCallbacks:
             raise Exception("Browser.SetClientCallback() failed: unknown "
                             "callback: %s" % name)
@@ -295,6 +329,13 @@ cdef class PyBrowser:
             # implementing LifespanHandler::DoClose().
             # | Debug("CefBrowser::ParentWindowWillClose()")
             # | self.GetCefBrowserHost().get().ParentWindowWillClose()
+            if len(g_pyBrowsers) == 1:
+                # This is the last browser remaining.
+                if g_sharedRequestContext.get():
+                    # A similar release is done in Shutdown 
+                    # and RemovePyBrowser.
+                    Debug("CloseBrowser: releasing shared request context")
+                    g_sharedRequestContext.Assign(NULL)
             Debug("CefBrowser::CloseBrowser(%s)" % forceClose)
             self.GetCefBrowserHost().get().CloseBrowser(bool(forceClose))
         
@@ -375,6 +416,9 @@ cdef class PyBrowser:
         else:
             return self.GetWindowHandle()
 
+    cpdef py_string GetUrl(self):
+        return self.GetMainFrame().GetUrl()
+
     cpdef object GetUserData(self, object key):
         if key in self.userData:
             return self.userData[key]
@@ -430,8 +474,11 @@ cdef class PyBrowser:
         ELIF CEF_VERSION == 3:
             return self.GetCefBrowserHost().get().IsWindowRenderingDisabled()
 
-    cpdef py_void Navigate(self, py_string url):
+    cpdef py_string LoadUrl(self, py_string url):
         self.GetMainFrame().LoadUrl(url)
+
+    cpdef py_void Navigate(self, py_string url):
+        self.LoadUrl(url)
 
     IF CEF_VERSION == 3:
         cpdef py_void Print(self):
@@ -458,10 +505,18 @@ cdef class PyBrowser:
         ELIF CEF_VERSION == 3:
             self.GetCefBrowserHost().get().SetZoomLevel(zoomLevel)
 
-    IF CEF_VERSION == 1:
-
-        cpdef py_void ShowDevTools(self):
-            self.GetCefBrowser().get().ShowDevTools()
+    cpdef py_void ShowDevTools(self):
+        cdef CefString cefUrl = self.GetCefBrowserHost().get().GetDevToolsURL(\
+                True)
+        cdef py_string url = CefToPyString(cefUrl)
+        # Example url returned:
+        # | http://localhost:54008/devtools/devtools.html?ws=localhost:54008
+        # | /devtools/page/1538ed984a2a4a90e5ed941c7d142a12
+        # Let's replace "localhost" with "127.0.0.1", using the ip address
+        # which is more reliable.
+        url = url.replace("localhost:", "127.0.0.1:")
+        jsCode = ("window.open('%s');" % url)
+        self.GetMainFrame().ExecuteJavascript(jsCode)
 
     cpdef py_void StopLoad(self):
         self.GetCefBrowser().get().StopLoad()

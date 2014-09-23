@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2013 The CEF Python authors. All rights reserved.
+# Copyright (c) 2012-2014 The CEF Python authors. All rights reserved.
 # License: New BSD License.
 # Website: http://code.google.com/p/cefpython/
 
@@ -217,3 +217,11 @@ cdef extern from "include/internal/cef_types.h":
         UR_IO_PENDING
         UR_CANCELED
         UR_FAILED
+
+    ctypedef uint32 cef_color_t
+
+    # CefJSDialogHandler.OnJSDialog()
+    enum cef_jsdialog_type_t:
+        JSDIALOGTYPE_ALERT = 0,
+        JSDIALOGTYPE_CONFIRM,
+        JSDIALOGTYPE_PROMPT,

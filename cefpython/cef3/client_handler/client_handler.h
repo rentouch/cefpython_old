@@ -2,6 +2,8 @@
 // License: New BSD License.
 // Website: http://code.google.com/p/cefpython/
 
+// ClientHandler code is running in the Browser process only.
+
 #pragma once
 
 #if defined(_WIN32)
@@ -17,7 +19,10 @@ class ClientHandler :
         public CefKeyboardHandler,
         public CefRequestHandler,
         public CefLoadHandler,
-        public CefRenderHandler
+        public CefRenderHandler,
+        public CefJSDialogHandler,
+        public CefDownloadHandler,
+        public CefContextMenuHandler
 {
 public:
   ClientHandler(){}
@@ -29,7 +34,7 @@ public:
   ///
   /*--cef()--*/
   virtual CefRefPtr<CefContextMenuHandler> GetContextMenuHandler() OVERRIDE {
-    return NULL;
+    return this;
   }
 
   ///
@@ -55,7 +60,7 @@ public:
   ///
   /*--cef()--*/
   virtual CefRefPtr<CefDownloadHandler> GetDownloadHandler() OVERRIDE {
-    return NULL;
+    return this;
   }
 
   ///
@@ -89,7 +94,7 @@ public:
   ///
   /*--cef()--*/
   virtual CefRefPtr<CefJSDialogHandler> GetJSDialogHandler() OVERRIDE {
-    return NULL;
+    return this;
   }
 
   ///
@@ -272,15 +277,6 @@ public:
   ///
 
   ///
-  // Called when the loading state has changed.
-  ///
-  /*--cef()--*/
-  virtual void OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
-                                    bool isLoading,
-                                    bool canGoBack,
-                                    bool canGoForward) OVERRIDE;
-
-  ///
   // Called when a frame's address has changed.
   ///
   /*--cef()--*/
@@ -370,7 +366,7 @@ public:
   // Called on the UI thread before browser navigation. Return true to cancel
   // the navigation or false to allow the navigation to proceed. The |request|
   // object cannot be modified in this callback.
-  // CefDisplayHandler::OnLoadingStateChange will be called twice in all cases.
+  // CefLoadHandler::OnLoadingStateChange will be called twice in all cases.
   // If the navigation is allowed CefLoadHandler::OnLoadStart and
   // CefLoadHandler::OnLoadEnd will be called. If the navigation is canceled
   // CefLoadHandler::OnLoadError will be called with an |errorCode| value of
@@ -448,17 +444,6 @@ public:
                               CefRefPtr<CefQuotaCallback> callback) OVERRIDE;
 
   ///
-  // Called on the IO thread to retrieve the cookie manager. |main_url| is the
-  // URL of the top-level frame. Cookies managers can be unique per browser or
-  // shared across multiple browsers. The global cookie manager will be used if
-  // this method returns NULL.
-  ///
-  /*--cef()--*/
-  virtual CefRefPtr<CefCookieManager> GetCookieManager(
-      CefRefPtr<CefBrowser> browser,
-      const CefString& main_url) OVERRIDE;
-
-  ///
   // Called on the UI thread to handle requests for URLs with an unknown
   // protocol component. Set |allow_os_execution| to true to attempt execution
   // via the registered OS protocol handler, if any.
@@ -495,6 +480,23 @@ public:
       const CefString& request_url,
       CefRefPtr<CefAllowCertificateErrorCallback> callback) OVERRIDE;
 
+  ///
+  // Called when the render process terminates unexpectedly. |status| indicates
+  // how the process terminated.
+  ///
+  /*--cef()--*/
+  virtual void OnRenderProcessTerminated(CefRefPtr<CefBrowser> browser,
+                                         cef_termination_status_t status) 
+                                         OVERRIDE;
+
+  ///
+  // Called when a plugin has crashed. |plugin_path| is the path of the plugin
+  // that crashed.
+  ///
+  /*--cef()--*/
+  virtual void OnPluginCrashed(CefRefPtr<CefBrowser> browser,
+                               const CefString& plugin_path) OVERRIDE;
+
   // --------------------------------------------------------------------------
   // CefLoadHandler
   // --------------------------------------------------------------------------
@@ -503,6 +505,15 @@ public:
   // Implement this interface to handle events related to browser load status. 
   // The methods of this class will be called on the UI thread.
   ///
+
+  ///
+  // Called when the loading state has changed.
+  ///
+  /*--cef()--*/
+  virtual void OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
+                                    bool isLoading,
+                                    bool canGoBack,
+                                    bool canGoForward) OVERRIDE;
 
   ///
   // Called when the browser begins loading a frame. The |frame| value will
@@ -541,23 +552,6 @@ public:
                            cef_errorcode_t errorCode,
                            const CefString& errorText,
                            const CefString& failedUrl) OVERRIDE;
-
-  ///
-  // Called when the render process terminates unexpectedly. |status| indicates
-  // how the process terminated.
-  ///
-  /*--cef()--*/
-  virtual void OnRenderProcessTerminated(CefRefPtr<CefBrowser> browser,
-                                         cef_termination_status_t status) 
-                                         OVERRIDE;
-
-  ///
-  // Called when a plugin has crashed. |plugin_path| is the path of the plugin
-  // that crashed.
-  ///
-  /*--cef()--*/
-  virtual void OnPluginCrashed(CefRefPtr<CefBrowser> browser,
-                               const CefString& plugin_path) OVERRIDE;
 
   // --------------------------------------------------------------------------
   // CefRenderHandler
@@ -650,6 +644,150 @@ public:
   ///
   /*--cef()--*/
   virtual void OnScrollOffsetChanged(CefRefPtr<CefBrowser> browser) OVERRIDE;
+
+  // --------------------------------------------------------------------------
+  // CefJSDialogHandler
+  // --------------------------------------------------------------------------
+  typedef cef_jsdialog_type_t JSDialogType;
+
+  ///
+  // Called to run a JavaScript dialog. The |default_prompt_text| value will be
+  // specified for prompt dialogs only. Set |suppress_message| to true and
+  // return false to suppress the message (suppressing messages is preferable
+  // to immediately executing the callback as this is used to detect presumably
+  // malicious behavior like spamming alert messages in onbeforeunload). Set
+  // |suppress_message| to false and return false to use the default
+  // implementation (the default implementation will show one modal dialog at a
+  // time and suppress any additional dialog requests until the displayed dialog
+  // is dismissed). Return true if the application will use a custom dialog or
+  // if the callback has been executed immediately. Custom dialogs may be either
+  // modal or modeless. If a custom dialog is used the application must execute
+  // |callback| once the custom dialog is dismissed.
+  ///
+  /*--cef(optional_param=accept_lang,optional_param=message_text,
+          optional_param=default_prompt_text)--*/
+  virtual bool OnJSDialog(CefRefPtr<CefBrowser> browser,
+                          const CefString& origin_url,
+                          const CefString& accept_lang,
+                          JSDialogType dialog_type,
+                          const CefString& message_text,
+                          const CefString& default_prompt_text,
+                          CefRefPtr<CefJSDialogCallback> callback,
+                          bool& suppress_message) OVERRIDE;
+
+  ///
+  // Called to run a dialog asking the user if they want to leave a page. Return
+  // false to use the default dialog implementation. Return true if the
+  // application will use a custom dialog or if the callback has been executed
+  // immediately. Custom dialogs may be either modal or modeless. If a custom
+  // dialog is used the application must execute |callback| once the custom
+  // dialog is dismissed.
+  ///
+  /*--cef(optional_param=message_text)--*/
+  virtual bool OnBeforeUnloadDialog(CefRefPtr<CefBrowser> browser,
+                                    const CefString& message_text,
+                                    bool is_reload,
+                                    CefRefPtr<CefJSDialogCallback> callback)
+                                    OVERRIDE;
+
+  ///
+  // Called to cancel any pending dialogs and reset any saved dialog state. Will
+  // be called due to events like page navigation irregardless of whether any
+  // dialogs are currently pending.
+  ///
+  /*--cef()--*/
+  virtual void OnResetDialogState(CefRefPtr<CefBrowser> browser) OVERRIDE;
+
+  ///
+  // Called when the default implementation dialog is closed.
+  ///
+  /*--cef()--*/
+  virtual void OnDialogClosed(CefRefPtr<CefBrowser> browser) OVERRIDE;
+
+  // --------------------------------------------------------------------------
+  // CefDownloadHandler
+  // --------------------------------------------------------------------------
+
+  ///
+  // Class used to handle file downloads. The methods of this class will called
+  // on the browser process UI thread.
+  ///
+
+  ///
+  // Called before a download begins. |suggested_name| is the suggested name for
+  // the download file. By default the download will be canceled. Execute
+  // |callback| either asynchronously or in this method to continue the download
+  // if desired. Do not keep a reference to |download_item| outside of this
+  // method.
+  ///
+  /*--cef()--*/
+  virtual void OnBeforeDownload(
+      CefRefPtr<CefBrowser> browser,
+      CefRefPtr<CefDownloadItem> download_item,
+      const CefString& suggested_name,
+      CefRefPtr<CefBeforeDownloadCallback> callback) OVERRIDE;
+
+  ///
+  // Called when a download's status or progress information has been updated.
+  // This may be called multiple times before and after OnBeforeDownload().
+  // Execute |callback| either asynchronously or in this method to cancel the
+  // download if desired. Do not keep a reference to |download_item| outside of
+  // this method.
+  ///
+  /*--cef()--*/
+  virtual void OnDownloadUpdated(
+      CefRefPtr<CefBrowser> browser,
+      CefRefPtr<CefDownloadItem> download_item,
+      CefRefPtr<CefDownloadItemCallback> callback) OVERRIDE;
+
+  // --------------------------------------------------------------------------
+  // CefDownloadHandler
+  // --------------------------------------------------------------------------
+  
+  ///
+  // Implement this interface to handle context menu events. The methods of this
+  // class will be called on the UI thread.
+  ///
+
+  typedef cef_event_flags_t EventFlags;
+
+  ///
+  // Called before a context menu is displayed. |params| provides information
+  // about the context menu state. |model| initially contains the default
+  // context menu. The |model| can be cleared to show no context menu or
+  // modified to show a custom menu. Do not keep references to |params| or
+  // |model| outside of this callback.
+  ///
+  /*--cef()--*/
+  virtual void OnBeforeContextMenu(CefRefPtr<CefBrowser> browser,
+                                   CefRefPtr<CefFrame> frame,
+                                   CefRefPtr<CefContextMenuParams> params,
+                                   CefRefPtr<CefMenuModel> model) OVERRIDE;
+
+  ///
+  // Called to execute a command selected from the context menu. Return true if
+  // the command was handled or false for the default implementation. See
+  // cef_menu_id_t for the command ids that have default implementations. All
+  // user-defined command ids should be between MENU_ID_USER_FIRST and
+  // MENU_ID_USER_LAST. |params| will have the same values as what was passed to
+  // OnBeforeContextMenu(). Do not keep a reference to |params| outside of this
+  // callback.
+  ///
+  /*--cef()--*/
+  virtual bool OnContextMenuCommand(CefRefPtr<CefBrowser> browser,
+                                    CefRefPtr<CefFrame> frame,
+                                    CefRefPtr<CefContextMenuParams> params,
+                                    int command_id,
+                                    EventFlags event_flags) OVERRIDE;
+
+  ///
+  // Called when the context menu is dismissed irregardless of whether the menu
+  // was empty or a command was selected.
+  ///
+  /*--cef()--*/
+  virtual void OnContextMenuDismissed(CefRefPtr<CefBrowser> browser,
+                                      CefRefPtr<CefFrame> frame) OVERRIDE;
+
 
 private:
    
